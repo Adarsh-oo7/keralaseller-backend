@@ -1,0 +1,4 @@
+http://localhost:3000/dashboard/seller
+http://localhost:3000/login/seller
+
+http://localhost:3000/register/seller
