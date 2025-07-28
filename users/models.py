@@ -50,3 +50,28 @@ class Seller(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.phone} - {self.name if self.name else 'Seller'}"
+
+
+
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from store.models import StoreProfile
+
+# ✅ CORRECTED SIGNAL with fallback logic
+@receiver(post_save, sender=Seller)
+def create_store_profile_for_seller(sender, instance, created, **kwargs):
+    """
+    Automatically create a StoreProfile when a new Seller is created.
+    """
+    if created:
+        # Use shop_name if it exists, otherwise create a default name
+        store_name = instance.shop_name or f"{instance.name}'s Store"
+        
+        # An absolute fallback in case both name and shop_name are empty
+        if not store_name.strip():
+            store_name = f"Store for {instance.phone}"
+
+        StoreProfile.objects.create(seller=instance, name=store_name)
+        print(f"StoreProfile created for seller: {instance.name} with name '{store_name}'")
