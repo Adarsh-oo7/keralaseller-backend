@@ -3,13 +3,31 @@
 from django.db import models
 from users.models import Seller  # Import the Seller model from your users app
 
+
 class StoreProfile(models.Model):
+    # --- Existing Fields ---
     seller = models.OneToOneField(Seller, on_delete=models.CASCADE, related_name='store_profile')
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
-    # You will need to install Pillow for ImageField: pip install Pillow
     banner_image = models.ImageField(upload_to='store_banners/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # --- START: New Payment Fields ---
+    PAYMENT_CHOICES = [
+        ('RAZORPAY', 'Razorpay'),
+        ('UPI', 'UPI Link'),
+        ('NONE', 'None'),
+    ]
+    payment_method = models.CharField(
+        max_length=10,
+        choices=PAYMENT_CHOICES,
+        default='NONE'
+    )
+    razorpay_key_id = models.CharField(max_length=100, blank=True, null=True)
+    razorpay_key_secret = models.CharField(max_length=100, blank=True, null=True)
+    upi_id = models.CharField(max_length=100, blank=True, null=True)
+    accepts_cod = models.BooleanField(default=False, help_text="Accept Cash on Delivery")
+    # --- END: New Payment Fields ---
 
     def __str__(self):
         return f"Store for {self.seller.name}"
