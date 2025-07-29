@@ -24,26 +24,37 @@ class ProductSerializer(serializers.ModelSerializer):
         return None
     
 # In store/serializers.py
+# In store/serializers.py
 class StoreProfileSerializer(serializers.ModelSerializer):
     banner_image_url = serializers.SerializerMethodField()
+    # Add a new method field for the logo URL
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = StoreProfile
-        # Add all the new payment fields to the list
         fields = [
-            'name', 'description', 'banner_image', 'banner_image_url',
+            'name', 'description', 
+            'banner_image', 'banner_image_url', 
+            'logo', 'logo_url', # Add the new logo fields
             'payment_method', 'razorpay_key_id', 'razorpay_key_secret',
-            'upi_id', 'accepts_cod'
+            'upi_id', 'accepts_cod',
+            'tagline', 'whatsapp_number', 'instagram_link', 'facebook_link'
         ]
         extra_kwargs = {
             'banner_image': {'write_only': True, 'required': False},
-            # Make secrets write-only for security
+            'logo': {'write_only': True, 'required': False}, # Make logo write-only
             'razorpay_key_secret': {'write_only': True, 'required': False}
         }
-    
+
     def get_banner_image_url(self, obj):
-        # ... (this function is unchanged)
         request = self.context.get('request')
         if obj.banner_image and hasattr(obj.banner_image, 'url'):
             return request.build_absolute_uri(obj.banner_image.url)
+        return None
+
+    # Add a new method to get the full logo URL
+    def get_logo_url(self, obj):
+        request = self.context.get('request')
+        if obj.logo and hasattr(obj.logo, 'url'):
+            return request.build_absolute_uri(obj.logo.url)
         return None

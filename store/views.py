@@ -6,6 +6,10 @@ from .serializers import ProductSerializer, StoreProfileSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+import razorpay # Import the razorpay library
+from razorpay.errors import BadRequestError, ServerError   
+
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
@@ -23,28 +27,49 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 
+
+
 class StoreProfileView(APIView):
-    """
-    Manages the store profile for the authenticated seller.
-    - GET: Retrieve the current store profile.
-    - PATCH: Update the store profile.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Retrieve the store profile linked to the logged-in seller
         store_profile = request.user.store_profile
-        # Pass context to get the full URL for the image
         serializer = StoreProfileSerializer(store_profile, context={'request': request})
         return Response(serializer.data)
 
     def patch(self, request):
         store_profile = request.user.store_profile
-        # 'partial=True' allows for partial updates (e.g., only changing the name)
+        
+        key_id = request.data.get('razorpay_key_id')
+        key_secret = request.data.get('razorpay_key_secret')
+
+        if request.data.get('payment_method') == 'RAZORPAY' and key_id and key_secret:
+            try:
+                client = razorpay.Client(auth=(key_id, key_secret))
+                client.payment.all({'count': 1})
+                print("✅ Razorpay keys are valid.")
+            except Exception as e:
+                # This general catch is more robust. We check the error text.
+                error_message = str(e).lower()
+                if 'authentication failed' in error_message or 'bad credentials' in error_message:
+                    print("❌ Invalid Razorpay keys detected.")
+                    return Response(
+                        {"error": "Invalid Razorpay Key ID or Key Secret. Please check again."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                else:
+                    # It was a different kind of error (e.g., network issue)
+                    print(f"An unexpected error occurred during Razorpay verification: {e}")
+                    return Response(
+                        {"error": "Could not verify Razorpay keys. Please try again later."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+        
         serializer = StoreProfileSerializer(
             store_profile, data=request.data, partial=True, context={'request': request}
         )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
