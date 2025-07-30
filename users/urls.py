@@ -8,4 +8,7 @@ urlpatterns = [
     path('store/', include('store.urls')),
 
     path('dashboard/', views.seller_dashboard, name='seller_dashboard'),
+
+    path('orders/', include('orders.urls')),
+
 ]
