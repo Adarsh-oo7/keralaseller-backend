@@ -81,15 +81,43 @@ class LoginSeller(APIView):
 
 
 # --- Dashboard View ---
+from django.db.models import Sum, Count
+from store.models import Product  # If not already imported
+from orders.models import Order, OrderItem
+
+# ... (other imports)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def seller_dashboard(request):
-    """
-    Provides dashboard data for the authenticated seller.
-    """
-    # request.user is the authenticated Seller instance
-    serializer = SellerSerializer(request.user)
+    seller = request.user
+    store_profile = seller.store_profile
+
+    # --- Analytics Calculations ---
+    completed_orders = Order.objects.filter(store=store_profile, status='DELIVERED')
+    
+    total_revenue = completed_orders.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    total_orders = Order.objects.filter(store=store_profile).count()
+    total_products = Product.objects.filter(store=store_profile).count()
+
+    # Find top 5 selling products
+    top_products_query = OrderItem.objects.filter(
+        order__store=store_profile
+    ).values('product__name').annotate(
+        total_sold=Sum('quantity')
+    ).order_by('-total_sold')[:5]
+
+    analytics_data = {
+        'total_revenue': total_revenue,
+        'total_orders': total_orders,
+        'total_products': total_products,
+        'top_selling_products': list(top_products_query)
+    }
+    # --- End Analytics Calculations ---
+
+    serializer = SellerSerializer(seller)
     return Response({
         "message": "Seller Dashboard Data",
         "seller": serializer.data,
+        "analytics": analytics_data, # ✅ Add analytics to the response
     }, status=status.HTTP_200_OK)

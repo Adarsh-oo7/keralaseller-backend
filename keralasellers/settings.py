@@ -128,6 +128,13 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
+
+RAZORPAY_KEY_ID = 'YOUR_KEY_ID'
+RAZORPAY_KEY_SECRET = 'YOUR_KEY_SECRET'
+
+
+
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',

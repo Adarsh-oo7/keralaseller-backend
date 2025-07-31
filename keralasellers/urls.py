@@ -22,6 +22,9 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("user/", include("users.urls")),
+    path('api/subscriptions/', include('subscriptions.urls')), # <-- Add this line
+
+
 
 ]
 if settings.DEBUG:

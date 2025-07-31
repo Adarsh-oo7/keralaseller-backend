@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoice for Order #{{ order.id }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        .invoice-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #eee; box-shadow: 0 0 10px rgba(0, 0, 0, 0.15); }
+        .header { text-align: center; margin-bottom: 20px; }
+        .details { margin-bottom: 30px; }
+        .details table { width: 100%; }
+        .items-table { width: 100%; border-collapse: collapse; }
+        .items-table th, .items-table td { border: 1px solid #ddd; padding: 8px; }
+        .items-table th { background-color: #f2f2f2; }
+        .total { text-align: right; margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="invoice-box">
+        <div class="header">
+            <h1>Invoice</h1>
+            <h2>{{ store.name }}</h2>
+            <p>Order #{{ order.id }}</p>
+            <p>Date: {{ order.created_at|date:"d M Y" }}</p>
+        </div>
+        <div class="details">
+            <table>
+                <tr>
+                    <td><strong>Billed To:</strong><br>{{ order.customer_name }}<br>{{ order.shipping_address }}<br>{{ order.customer_phone }}</td>
+                    <td><strong>From:</strong><br>{{ store.name }}<br>{{ seller.name }}<br>{{ seller.phone }}</td>
+                </tr>
+            </table>
+        </div>
+        <table class="items-table">
+            <thead>
+                <tr><th>Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+                {% for item in order.items.all %}
+                <tr><td>{{ item.product.name }}</td><td>{{ item.quantity }}</td><td>₹{{ item.price }}</td><td>₹{% widthratio item.price 1 item.quantity %}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="total">Grand Total: ₹{{ order.total_amount }}</div>
+    </div>
+</body>
+</html>
