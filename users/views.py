@@ -121,3 +121,62 @@ def seller_dashboard(request):
         "seller": serializer.data,
         "analytics": analytics_data, # ✅ Add analytics to the response
     }, status=status.HTTP_200_OK)
+
+from django.db.models import Q
+from rest_framework.authtoken.models import Token
+from users.models import Buyer
+from rest_framework import permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView        
+from .models import Buyer
+from .serializers import BuyerSerializer # We will create this
+from rest_framework.authtoken.models import Token
+
+
+
+# This is a conceptual view. A real implementation would use a library
+# like 'dj-rest-auth' with 'allauth' for robust Google authentication.
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        email = request.data.get('email') # Assume frontend sends verified email
+        full_name = request.data.get('name')
+        if not email:
+            return Response({'error': 'Email is required.'}, status=400)
+        
+        buyer, created = Buyer.objects.get_or_create(
+            email=email,
+            defaults={'full_name': full_name}
+        )
+        token, _ = Token.objects.get_or_create(user=buyer)
+        return Response({'token': token.key})
+
+class SendBuyerOTP(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        phone = request.data.get('phone')
+        if not phone:
+            return Response({'error': 'Phone number required.'}, status=400)
+        
+        # Save phone to user, but not yet verified
+        request.user.phone_number = phone
+        request.user.save()
+        
+        otp = random.randint(1000, 9999)
+        cache.set(f"otp_buyer_{request.user.id}", otp, timeout=300)
+        print(f"OTP for buyer {request.user.email}: {otp}")
+        return Response({'message': 'OTP sent.'})
+
+class VerifyBuyerOTP(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        otp_entered = request.data.get('otp')
+        stored_otp = cache.get(f"otp_buyer_{request.user.id}")
+
+        if str(otp_entered) == str(stored_otp):
+            request.user.phone_verified = True
+            request.user.save()
+            cache.delete(f"otp_buyer_{request.user.id}")
+            return Response({'message': 'Phone number verified successfully.'})
+        
+        return Response({'error': 'Invalid OTP.'}, status=400)

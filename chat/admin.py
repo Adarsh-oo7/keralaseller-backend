@@ -1,28 +1,30 @@
+# admin.py
 from django.contrib import admin
 from .models import Conversation, Message
 
 class MessageInline(admin.TabularInline):
     model = Message
     extra = 0
-    readonly_fields = ('sender', 'text', 'timestamp')
+    # ✅ Updated to use the new fields
+    readonly_fields = ('sender_id', 'sender_type', 'text', 'timestamp')
     can_delete = False
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
     list_display = ('id', 'seller', 'buyer', 'created_at')
-    search_fields = ('seller__name', 'buyer__full_name')
+    search_fields = ('seller__username', 'buyer__full_name')  # Adjust field names as needed
     inlines = [MessageInline]
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    # ✅ Use the new 'get_sender' method in the display list
-    list_display = ('id', 'conversation', 'get_sender', 'text', 'timestamp')
-    list_filter = ('timestamp', 'sender_content_type')
+    # ✅ Updated to use the new fields and method
+    list_display = ('id', 'conversation', 'get_sender_display', 'text', 'timestamp')
+    list_filter = ('timestamp', 'sender_type')  # Use sender_type instead of sender_content_type
     search_fields = ('text',)
 
-    @admin.display(description='Sender') # Sets the column header title
-    def get_sender(self, obj):
+    @admin.display(description='Sender')
+    def get_sender_display(self, obj):
         """
-        This method returns the string representation of the sender object.
+        This method returns a readable representation of the sender.
         """
-        return obj.sender
+        return f"{obj.sender_type.title()} (ID: {obj.sender_id})"

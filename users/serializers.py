@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 from django.core.cache import cache
-from .models import Seller
+from .models import Seller, Buyer
 
 class SellerSerializer(serializers.ModelSerializer):
     """
@@ -48,3 +48,8 @@ class RegisterSellerSerializer(serializers.ModelSerializer):
         # Use the custom manager's create_user method to ensure password is hashed
         user = Seller.objects.create_user(**validated_data)
         return user
+    
+class BuyerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Buyer
+        fields = ['id', 'email', 'full_name', 'phone_number', 'phone_verified']

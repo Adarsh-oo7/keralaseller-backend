@@ -70,7 +70,11 @@ class Buyer(AbstractBaseUser, PermissionsMixin):
     full_name = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    
+
+
+    phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
+    phone_verified = models.BooleanField(default=False)
+
     # Fix for clashing reverse accessors with Seller model
     groups = models.ManyToManyField('auth.Group', related_name='buyer_set', blank=True)
     user_permissions = models.ManyToManyField('auth.Permission', related_name='buyer_permissions_set', blank=True)
