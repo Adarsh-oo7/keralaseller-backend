@@ -77,10 +77,12 @@ class GenerateBillView(APIView):
         
 
 # In orders/views.py
-from store.models import Product
-from django.db import transaction
+from django.db import transaction # ✅ Add this import
+from rest_framework.views import APIView
+from rest_framework import permissions, status
+from rest_framework.response import Response
 from .models import Order, OrderItem
-# ... (your existing imports and views)
+from store.models import Product
 
 class CreateLocalOrderView(APIView):
     """
@@ -99,50 +101,51 @@ class CreateLocalOrderView(APIView):
         if not items_data:
             return Response({'error': 'No items in the bill.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        total_amount = 0
-        order_items_to_create = []
+        try:
+            # ✅ The transaction block now wraps the entire operation
+            with transaction.atomic():
+                total_amount = 0
+                order_items_to_create = []
 
-        with transaction.atomic():
-            # Create the main order record first
-            new_order = Order.objects.create(
-                store=store_profile,
-                customer_name=customer_name,
-                customer_phone=customer_phone,
-                shipping_address="In-store Purchase",
-                total_amount=0, # We'll calculate and update this
-                status=Order.OrderStatus.DELIVERED # Local sales are instantly delivered
-            )
+                new_order = Order.objects.create(
+                    store=store_profile,
+                    customer_name=customer_name,
+                    customer_phone=customer_phone,
+                    shipping_address="In-store Purchase",
+                    total_amount=0,
+                    status=Order.OrderStatus.DELIVERED
+                )
 
-            for item in items_data:
-                try:
+                for item in items_data:
                     product = Product.objects.get(id=item['id'], store=store_profile)
                     quantity = int(item['quantity'])
 
                     if product.total_stock < quantity:
-                         # Roll back the transaction
                         raise Exception(f"Not enough stock for {product.name}. Available: {product.total_stock}, Requested: {quantity}")
 
-                    price = product.price # Use the current product price
+                    price = product.price
                     item_total = price * quantity
                     total_amount += item_total
                     
-                    # Deduct from stock
                     product.total_stock -= quantity
                     product.online_stock = min(product.online_stock, product.total_stock)
+                    # Pass the user to enable history logging
+                    product._current_user = request.user
+                    product._stock_change_note = f"Sale for Order #{new_order.id}"
                     product.save()
 
                     order_items_to_create.append(
                         OrderItem(order=new_order, product=product, quantity=quantity, price=price)
                     )
-                except Product.DoesNotExist:
-                    raise Exception(f"Product with ID {item['id']} not found.")
-                except Exception as e:
-                     return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create all items and update the order's final price
-            OrderItem.objects.bulk_create(order_items_to_create)
-            new_order.total_amount = total_amount
-            new_order.save()
+                OrderItem.objects.bulk_create(order_items_to_create)
+                new_order.total_amount = total_amount
+                new_order.save()
 
-        # Return the ID of the newly created order
+        except Product.DoesNotExist:
+             return Response({'error': 'A product in the bill was not found.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # This will now catch the "Not enough stock" error and others
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({'order_id': new_order.id}, status=status.HTTP_201_CREATED)

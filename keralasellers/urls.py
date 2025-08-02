@@ -24,6 +24,7 @@ urlpatterns = [
     path("user/", include("users.urls")),
     path('api/subscriptions/', include('subscriptions.urls')), # <-- Add this line
 
+    path('api/chat/', include('chat.urls')),
 
 
 ]
