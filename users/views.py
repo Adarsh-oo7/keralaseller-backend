@@ -180,3 +180,21 @@ class VerifyBuyerOTP(APIView):
             return Response({'message': 'Phone number verified successfully.'})
         
         return Response({'error': 'Invalid OTP.'}, status=400)
+
+
+
+# ✅ Add this new view for the buyer's profile
+class BuyerProfileView(APIView):
+    """
+    Provides the profile data for the authenticated buyer.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Ensure the logged-in user is a Buyer instance
+        if not isinstance(request.user, Buyer):
+            return Response({'error': 'User is not a buyer.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Serialize and return the buyer's data
+        serializer = BuyerSerializer(request.user)
+        return Response(serializer.data)

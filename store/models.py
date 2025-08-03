@@ -42,11 +42,25 @@ class StoreProfile(models.Model):
 # In store/models.py
 from django.db import models
 from django.db.models import Q, F, CheckConstraint
+from django.db import models
+from django.db.models import Q, F, CheckConstraint
 
 class Product(models.Model):
+    # ✅ Add this nested class for choices
+    class SaleType(models.TextChoices):
+        ONLINE_AND_OFFLINE = 'BOTH', 'Online & In-Store'
+        OFFLINE_ONLY = 'OFFLINE', 'In-Store Only'
+        ONLINE_ONLY = 'ONLINE', 'Online Only'
+
     store = models.ForeignKey('StoreProfile', on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
+    model_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Variation of the product (e.g., Red XL, 250g)"
+    )
+    description = models.TextField(blank=True, null=True) # ✅ Removed duplicate
     price = models.DecimalField(max_digits=10, decimal_places=2)
     mrp = models.DecimalField(
         max_digits=10,
@@ -54,12 +68,6 @@ class Product(models.Model):
         blank=True,
         null=True,
         help_text="Maximum Retail Price (defaults to price if blank)"
-    )
-    model_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Variation of the product (e.g., Red XL, 250g)"
     )
     total_stock = models.PositiveIntegerField(
         default=0,
@@ -69,10 +77,14 @@ class Product(models.Model):
         default=0,
         help_text="Stock allocated for the online store."
     )
-    description = models.TextField(blank=True, null=True)
-
+    # ✅ Added the missing sale_type field
+    sale_type = models.CharField(
+        max_length=10,
+        choices=SaleType.choices,
+        default=SaleType.ONLINE_AND_OFFLINE
+    )
     image = models.ImageField(upload_to='product_images/', blank=True, null=True)
-    is_active = models.BooleanField(default=True, help_text="Is the product visible in the online store?")
+    is_active = models.BooleanField(default=True, help_text="Is the product available for sale?")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -84,14 +96,12 @@ class Product(models.Model):
         ]
     
     def save(self, *args, **kwargs):
-        # If MRP is not provided, set it to the selling price automatically
         if self.mrp is None:
             self.mrp = self.price
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
-    
 
 from django.conf import settings # Import settings
 

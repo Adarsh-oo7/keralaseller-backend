@@ -18,13 +18,18 @@ from django.contrib import admin
 from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
+from store.views import PublicStoreView
+from users.views import BuyerProfileView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("user/", include("users.urls")),
     path('api/subscriptions/', include('subscriptions.urls')), # <-- Add this line
+    path('api/buyer/profile/', BuyerProfileView.as_view(), name='buyer-profile'),
 
     path('api/chat/', include('chat.urls')),
+    path('shop/<str:seller_phone>/', PublicStoreView.as_view(), name='public-store-view'),
+
 
 
 ]

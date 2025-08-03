@@ -7,11 +7,12 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'model_name', 'description', 'price', 'mrp', 
-            'total_stock', 'online_stock', 'image_url', 'is_active', 'image'
+            'id', 'name', 'model_name', 'description', 
+            'price', 'mrp', 'total_stock', 'online_stock', 
+            'sale_type',  # ✅ This field was missing
+            'image_url', 'is_active', 'image'
         ]
         read_only_fields = ['id', 'image_url']
-        # ✅ Added 'image' here to make it write-only and not required
         extra_kwargs = {
             'image': {'write_only': True, 'required': False}
         }

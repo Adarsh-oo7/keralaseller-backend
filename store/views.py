@@ -8,10 +8,10 @@ from rest_framework.filters import SearchFilter # ✅ Add this import
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [SearchFilter]
-    search_fields = ['name', 'model_name'] # S
-    # ✅ Add this method to provide context to the serializer
+    search_fields = ['name', 'model_name']
+
     def get_serializer_context(self):
         """
         Ensures the serializer has access to the request context,
@@ -20,12 +20,24 @@ class ProductViewSet(viewsets.ModelViewSet):
         return {'request': self.request}
 
     def get_queryset(self):
-        # Return only products owned by the currently logged-in seller
-        return Product.objects.filter(store__seller=self.request.user)
+        # For an authenticated seller, show all their products in the dashboard
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'store_profile'):
+             return Product.objects.filter(store__seller=self.request.user)
+        
+        # For the public, only show active, online products with stock
+        return Product.objects.filter(
+            is_active=True, 
+            online_stock__gt=0,
+            sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
+        ).order_by('-created_at')
 
     def perform_create(self, serializer):
-        # Automatically assign the seller's store when creating a new product
-        serializer.save(store=self.request.user.store_profile)
+        # Pass the current user to be used in the signal
+        serializer.save(
+            store=self.request.user.store_profile,
+            _current_user=self.request.user 
+        )
+
 
 
 class StoreProfileView(APIView):
@@ -121,3 +133,73 @@ class StockHistoryListView(ListAPIView):
     def get_queryset(self):
         # Return history for products belonging to the seller's store
         return StockHistory.objects.filter(product__store__seller=self.request.user).order_by('-timestamp')
+
+
+
+
+
+from rest_framework import viewsets, permissions, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.filters import SearchFilter
+from rest_framework.generics import ListAPIView
+from .models import Product, StoreProfile, StockHistory
+from .serializers import ProductSerializer, StoreProfileSerializer, StockHistorySerializer
+from users.models import Seller # Make sure Seller is imported
+
+# This is your existing viewset for the seller dashboard
+class ProductViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [SearchFilter]
+    search_fields = ['name', 'model_name']
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'store_profile'):
+             return Product.objects.filter(store__seller=self.request.user)
+        
+        return Product.objects.filter(
+            is_active=True, 
+            online_stock__gt=0,
+            sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
+        ).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(store=self.request.user.store_profile)
+
+# ... (Your other existing views like StoreProfileView, UpdateStockView, etc., are here) ...
+
+
+# ✅ Add this new view for the public storefront
+class PublicStoreView(APIView):
+    """
+    Provides the public data for a single seller's storefront,
+    accessible via a unique identifier like the seller's phone number.
+    """
+    permission_classes = [permissions.AllowAny] # This makes the view public
+
+    def get(self, request, seller_phone=None):
+        try:
+            seller = Seller.objects.get(phone=seller_phone)
+            store_profile = seller.store_profile
+            
+            products = Product.objects.filter(
+                store=store_profile,
+                is_active=True,
+                online_stock__gt=0,
+                sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
+            ).order_by('-created_at')
+
+            store_data = StoreProfileSerializer(store_profile, context={'request': request}).data
+            product_data = ProductSerializer(products, many=True, context={'request': request}).data
+
+            return Response({
+                'store': store_data,
+                'products': product_data
+            })
+
+        except (Seller.DoesNotExist, StoreProfile.DoesNotExist):
+            return Response({'error': 'Store not found.'}, status=status.HTTP_404_NOT_FOUND)
