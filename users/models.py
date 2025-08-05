@@ -75,6 +75,11 @@ class Buyer(AbstractBaseUser, PermissionsMixin):
     phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
     phone_verified = models.BooleanField(default=False)
 
+    address_line_1 = models.CharField(max_length=255, blank=True, null=True)
+    address_line_2 = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    pincode = models.CharField(max_length=10, blank=True, null=True)
+
     # Fix for clashing reverse accessors with Seller model
     groups = models.ManyToManyField('auth.Group', related_name='buyer_set', blank=True)
     user_permissions = models.ManyToManyField('auth.Permission', related_name='buyer_permissions_set', blank=True)
@@ -85,3 +90,28 @@ class Buyer(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+
+# ✅ Add this new custom token model for sellers
+class SellerToken(models.Model):
+    key = models.CharField(max_length=40, primary_key=True)
+    user = models.OneToOneField(
+        Seller, # Directly link to the Seller model
+        related_name='auth_token',
+        on_delete=models.CASCADE
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = self.generate_key()
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_key(cls):
+        import binascii
+        import os
+        return binascii.hexlify(os.urandom(20)).decode()
+
+    def __str__(self):
+        return self.key

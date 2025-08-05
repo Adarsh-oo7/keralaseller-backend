@@ -49,7 +49,11 @@ class RegisterSellerSerializer(serializers.ModelSerializer):
         user = Seller.objects.create_user(**validated_data)
         return user
     
+# In users/serializers.py
 class BuyerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Buyer
-        fields = ['id', 'email', 'full_name', 'phone_number', 'phone_verified']
+        fields = [
+            'id', 'email', 'full_name', 'phone_number', 'phone_verified',
+            'address_line_1', 'address_line_2', 'city', 'pincode'
+        ]

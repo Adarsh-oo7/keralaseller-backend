@@ -11,7 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.authtoken.models import Token
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Seller, Buyer
+from .models import Seller, Buyer, SellerToken
 from .serializers import RegisterSellerSerializer, SellerSerializer, BuyerSerializer
 from store.models import Product
 from orders.models import Order, OrderItem
@@ -46,13 +46,15 @@ class RegisterSeller(APIView):
         serializer = RegisterSellerSerializer(data=request.data)
         if serializer.is_valid():
             seller = serializer.save()
-            token, _ = Token.objects.get_or_create(user=seller)
+            # ✅ Use the new SellerToken model
+            token, _ = SellerToken.objects.get_or_create(user=seller)
             cache.delete(f"otp_{seller.phone}")
             return Response({
                 "message": "Seller registered successfully",
                 "token": token.key,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class LoginSeller(APIView):
     permission_classes = [permissions.AllowAny]
@@ -65,9 +67,12 @@ class LoginSeller(APIView):
             user = Seller.objects.get(phone=phone)
         except Seller.DoesNotExist:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+        
         if user.check_password(password) and user.is_active:
-            token, _ = Token.objects.get_or_create(user=user)
+            # ✅ Use the new SellerToken model
+            token, _ = SellerToken.objects.get_or_create(user=user)
             return Response({ "message": "Login successful", "token": token.key }, status=status.HTTP_200_OK)
+        
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 @api_view(['GET'])
@@ -133,9 +138,22 @@ class VerifyBuyerOTP(APIView):
             return Response({'message': 'Phone number verified successfully.'})
         return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
 
+# In users/views.py
 class BuyerProfileView(APIView):
-    permission_classes = [IsBuyer] # ✅ Correctly defined once
+    permission_classes = [IsBuyer]
+
     def get(self, request):
-        # The permission class already handles the check, so the view is simpler
         serializer = BuyerSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        """
+        Allows the buyer to update their profile information (e.g., address).
+        """
+        buyer = request.user
+        # partial=True allows for updating only some fields at a time
+        serializer = BuyerSerializer(buyer, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

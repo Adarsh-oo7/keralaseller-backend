@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
-from store.views import PublicStoreView
+from store.views import PublicStoreView, PublicStoreListView
 from users.views import BuyerProfileView
 
 urlpatterns = [
@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/chat/', include('chat.urls')),
     path('shop/<str:seller_phone>/', PublicStoreView.as_view(), name='public-store-view'),
 
+    path('shops/', PublicStoreListView.as_view(), name='public-store-list'),
 
 
 ]

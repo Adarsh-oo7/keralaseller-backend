@@ -27,6 +27,7 @@ class ProductSerializer(serializers.ModelSerializer):
 class StoreProfileSerializer(serializers.ModelSerializer):
     banner_image_url = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
+    seller_phone = serializers.CharField(source='seller.phone', read_only=True)
 
     class Meta:
         model = StoreProfile
@@ -34,6 +35,8 @@ class StoreProfileSerializer(serializers.ModelSerializer):
             'name', 'description', 
             'banner_image', 'banner_image_url', 
             'logo', 'logo_url',
+            'seller_phone', # ✅ Add the new field to the list
+
             'payment_method', 'razorpay_key_id', 'razorpay_key_secret',
             'upi_id', 'accepts_cod',
             'tagline', 'whatsapp_number', 'instagram_link', 'facebook_link'

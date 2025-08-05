@@ -136,6 +136,13 @@ class StockHistoryListView(ListAPIView):
 
 
 
+class PublicStoreListView(ListAPIView):
+    """
+    Provides a public list of all active store profiles.
+    """
+    permission_classes = [permissions.AllowAny]
+    serializer_class = StoreProfileSerializer
+    queryset = StoreProfile.objects.filter(seller__is_active=True).order_by('-created_at')
 
 
 from rest_framework import viewsets, permissions, status

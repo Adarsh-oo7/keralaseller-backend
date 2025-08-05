@@ -1,36 +1,40 @@
-# users/backends.py
-from django.contrib.auth.backends import BaseBackend
-from .models import Seller
+from .models import Seller, Buyer
 
-class SellerAuthBackend(BaseBackend):
-    """
-    Custom authentication backend for Seller model using phone number
-    """
-    def authenticate(self, request, phone=None, password=None, **kwargs):
-        print(f"🔍 Backend authenticate called with phone: {phone}")
-        
-        if phone is None or password is None:
-            print("❌ Missing phone or password")
-            return None
-        
+class SellerAuthBackend:
+    def authenticate(self, request, username=None, password=None, **kwargs):
+        phone = kwargs.get('phone', username)
         try:
-            seller = Seller.objects.get(phone=phone)
-            print(f"✅ Found seller: {seller.phone}")
-            
-            if seller.check_password(password):
-                print(f"✅ Password correct for: {phone}")
-                return seller
-            else:
-                print(f"❌ Password incorrect for: {phone}")
-                
+            user = Seller.objects.get(phone=phone)
+            if user.check_password(password):
+                return user
         except Seller.DoesNotExist:
-            print(f"❌ Seller does not exist: {phone}")
             return None
-        
-        return None
 
     def get_user(self, user_id):
         try:
             return Seller.objects.get(pk=user_id)
         except Seller.DoesNotExist:
+            # Fallback to check Buyer model if Seller not found
+            try:
+                return Buyer.objects.get(pk=user_id)
+            except Buyer.DoesNotExist:
+                return None
+
+class BuyerAuthBackend:
+    def authenticate(self, request, username=None, password=None, **kwargs):
+        # Buyers don't use password auth in our app, but this is for completeness
+        email = kwargs.get('email', username)
+        try:
+            return Buyer.objects.get(email=email)
+        except Buyer.DoesNotExist:
             return None
+    
+    def get_user(self, user_id):
+        try:
+            return Buyer.objects.get(pk=user_id)
+        except Buyer.DoesNotExist:
+            # Fallback to check Seller model if Buyer not found
+            try:
+                return Seller.objects.get(pk=user_id)
+            except Seller.DoesNotExist:
+                return None
