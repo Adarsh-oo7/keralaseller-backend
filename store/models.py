@@ -11,8 +11,31 @@ class StoreProfile(models.Model):
     description = models.TextField(blank=True, null=True)
     banner_image = models.ImageField(upload_to='store_banners/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    delivery_time_local = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        help_text="Estimated delivery time for local orders (e.g., '2-3 days')"
+    )
+    delivery_time_national = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        help_text="Estimated delivery time for out-of-state orders (e.g., '5-7 days')"
+    )
     # --- START: New Payment Fields ---
+    meta_title = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True, 
+        help_text="SEO title for the shop page (max 100 chars)."
+    )
+    meta_description = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        help_text="SEO description for the shop page (max 255 chars)."
+    )
     PAYMENT_CHOICES = [
         ('RAZORPAY', 'Razorpay'),
         ('UPI', 'UPI Link'),
@@ -104,6 +127,9 @@ class Product(models.Model):
         return self.name
 
 from django.conf import settings # Import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+
 
 class StockHistory(models.Model):
     class Action(models.TextChoices):
@@ -112,19 +138,20 @@ class StockHistory(models.Model):
         SALE = 'SALE', 'Sale'
         RETURN = 'RETURN', 'Return'
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='history')
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True
-    )
-    note = models.CharField(max_length=255, blank=True, null=True, help_text="Reason for the stock change")
-
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='history')
+    
+    # ✅ START: Corrected User Fields using GenericForeignKey
+    # This allows the 'user' to be either a Seller or a Buyer
+    user_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    user_object_id = models.PositiveIntegerField()
+    user = GenericForeignKey('user_content_type', 'user_object_id')
+    # ✅ END: Corrected User Fields
+    
     action = models.CharField(max_length=20, choices=Action.choices)
-    change_total = models.IntegerField(help_text="Change in total stock (e.g., +10 or -2)")
-    change_online = models.IntegerField(help_text="Change in online stock (e.g., +5 or -1)")
+    change_total = models.IntegerField()
+    change_online = models.IntegerField()
+    note = models.CharField(max_length=255, blank=True, null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.product.name} stock change at {self.timestamp}"
+        return f"{self.product.name} stock change at {self.timestamp.strftime('%Y-%m-%d %H:%M')}"

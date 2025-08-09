@@ -86,13 +86,43 @@ AUTHENTICATION_BACKENDS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication', # For Buyers
-        'users.authentication.SellerTokenAuthentication',       # For Sellers (using your custom class)
+        'users.jwt_authentication.BuyerJWTAuthentication',  # ✅ Use custom authentication for Buyers
+        'users.authentication.SellerTokenAuthentication',   # ✅ Keep your seller auth
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
-    ]
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
 }
+
+
+from datetime import timedelta
+
+# JWT Settings
+# JWT Settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+    
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    
+    # This is the key fix - tell JWT how to get the user
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+}
+
+# Add this import at the top
+from datetime import timedelta
+
 
 
 # ==============================================================================
@@ -110,7 +140,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+CORS_ALLOW_CREDENTIALS = True
 # ==============================================================================
 # THIRD-PARTY CONFIGURATIONS (CORS, RAZORPAY, ETC.)
 # ==============================================================================
@@ -118,6 +148,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ✅ CORS settings defined once and correctly
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 # For development, if you need to allow all, use this and comment out the list above
 # CORS_ALLOW_ALL_ORIGINS = True

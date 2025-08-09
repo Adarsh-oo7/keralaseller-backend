@@ -1,15 +1,16 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import OrderViewSet, GenerateBillView, CreateLocalOrderView
+from .views import OrderViewSet, GenerateBillView, CreateOrderView, BuyerOrderHistoryView # ✅ Make sure it's imported
 
 router = DefaultRouter()
 router.register(r'', OrderViewSet, basename='order')
 
 urlpatterns = [
-    # ✅ Specific paths MUST come BEFORE the general router
-    path('create-local-order/', CreateLocalOrderView.as_view(), name='create-local-order'),
+    path('create-order/', CreateOrderView.as_view(), name='create-order'),
     path('<int:pk>/generate-bill/', GenerateBillView.as_view(), name='generate-bill'),
     
-    # The router handles all other general paths like / and /<id>/
+    # ✅ This path should now work correctly
+    path('history/', BuyerOrderHistoryView.as_view(), name='buyer-order-history'),
+    
     path('', include(router.urls)),
 ]

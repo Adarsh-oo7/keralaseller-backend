@@ -13,18 +13,11 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'model_name']
 
     def get_serializer_context(self):
-        """
-        Ensures the serializer has access to the request context,
-        which is needed to build full absolute URLs for images.
-        """
         return {'request': self.request}
 
     def get_queryset(self):
-        # For an authenticated seller, show all their products in the dashboard
         if self.request.user.is_authenticated and hasattr(self.request.user, 'store_profile'):
-             return Product.objects.filter(store__seller=self.request.user)
-        
-        # For the public, only show active, online products with stock
+            return Product.objects.filter(store__seller=self.request.user)
         return Product.objects.filter(
             is_active=True, 
             online_stock__gt=0,
@@ -32,12 +25,43 @@ class ProductViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
-        # Pass the current user to be used in the signal
-        serializer.save(
-            store=self.request.user.store_profile,
-            _current_user=self.request.user 
-        )
+        """
+        Save the product with the seller's store and set the current user for the signal.
+        """
+        # Get the seller (current user)
+        seller = self.request.user
+        
+        # Save the product with the store
+        product = serializer.save(store=seller.store_profile)
+        
+        # Set the current user for the signal to use
+        product._current_user = seller
+        product._stock_change_note = "Product created via dashboard"
+        
+        # Save again to trigger the post_save signal with user info
+        product.save()
+        
+        return product
 
+    def perform_update(self, serializer):
+        """
+        Update the product and set the current user for stock tracking.
+        """
+        seller = self.request.user
+        
+        # Save the product
+        product = serializer.save()
+        
+        # Set the current user and note for the signal
+        product._current_user = seller
+        product._stock_change_note = "Product updated via dashboard"
+        
+        # Save again to trigger the signal with user info
+        product.save()
+        
+        return product
+
+        # Let's update the signal for a more robust solution.
 
 
 class StoreProfileView(APIView):
@@ -155,38 +179,46 @@ from .serializers import ProductSerializer, StoreProfileSerializer, StockHistory
 from users.models import Seller # Make sure Seller is imported
 
 # This is your existing viewset for the seller dashboard
-class ProductViewSet(viewsets.ModelViewSet):
-    serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    filter_backends = [SearchFilter]
-    search_fields = ['name', 'model_name']
+# class ProductViewSet(viewsets.ModelViewSet):
+#     serializer_class = ProductSerializer
+#     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+#     filter_backends = [SearchFilter]
+#     search_fields = ['name', 'model_name']
 
-    def get_serializer_context(self):
-        return {'request': self.request}
+#     def get_serializer_context(self):
+#         return {'request': self.request}
 
-    def get_queryset(self):
-        if self.request.user.is_authenticated and hasattr(self.request.user, 'store_profile'):
-             return Product.objects.filter(store__seller=self.request.user)
+#     def get_queryset(self):
+#         if self.request.user.is_authenticated and hasattr(self.request.user, 'store_profile'):
+#              return Product.objects.filter(store__seller=self.request.user)
         
-        return Product.objects.filter(
-            is_active=True, 
-            online_stock__gt=0,
-            sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
-        ).order_by('-created_at')
+#         return Product.objects.filter(
+#             is_active=True, 
+#             online_stock__gt=0,
+#             sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
+#         ).order_by('-created_at')
 
-    def perform_create(self, serializer):
-        serializer.save(store=self.request.user.store_profile)
-
+#     def perform_create(self, serializer):
+#         """
+#         Assigns the store and passes the current user to the model
+#         before creating a new product.
+#         """
+#         # Pass the current user to be used in the signal
+#         serializer.save(
+#             store=self.request.user.store_profile,
+#             _current_user=self.request.user 
+#         )
 # ... (Your other existing views like StoreProfileView, UpdateStockView, etc., are here) ...
 
 
 # ✅ Add this new view for the public storefront
+
 class PublicStoreView(APIView):
     """
-    Provides the public data for a single seller's storefront,
-    accessible via a unique identifier like the seller's phone number.
+    Provides the public data for a single seller's storefront.
+    Automatically generates SEO meta tags if they are not provided by the seller.
     """
-    permission_classes = [permissions.AllowAny] # This makes the view public
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, seller_phone=None):
         try:
@@ -203,6 +235,16 @@ class PublicStoreView(APIView):
             store_data = StoreProfileSerializer(store_profile, context={'request': request}).data
             product_data = ProductSerializer(products, many=True, context={'request': request}).data
 
+            # ✅ START: Automatic SEO Generation
+            # If the seller has not provided a custom SEO title, create one.
+            if not store_data.get('meta_title'):
+                store_data['meta_title'] = f"{store_profile.name} | Kerala Sellers"
+            
+            # If the seller has not provided a custom SEO description, create one.
+            if not store_data.get('meta_description'):
+                store_data['meta_description'] = f"Explore unique products from {store_profile.name}, a local business on the Kerala Sellers platform. Order online today."
+            # ✅ END: Automatic SEO Generation
+
             return Response({
                 'store': store_data,
                 'products': product_data
@@ -210,3 +252,34 @@ class PublicStoreView(APIView):
 
         except (Seller.DoesNotExist, StoreProfile.DoesNotExist):
             return Response({'error': 'Store not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+from datetime import date, timedelta
+class EstimateDeliveryView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, pk=None):
+        product = Product.objects.get(pk=pk)
+        store = product.store
+        buyer_pincode = request.query_params.get('pincode')
+
+        if not store.pincode or not buyer_pincode:
+            return Response({'estimate': 'Delivery info not available.'})
+
+        # Simple logic for Kerala (pincodes starting with '6')
+        is_local = buyer_pincode.startswith('6')
+        
+        # ✅ START: Hybrid Logic
+        # 1. Check for seller's manual estimate first
+        if is_local and store.delivery_time_local:
+            estimate = f"Around {store.delivery_time_local}"
+        elif not is_local and store.delivery_time_national:
+            estimate = f"Around {store.delivery_time_national}"
+        else:
+            # 2. Fallback to automatic calculation
+            delivery_days = 3 if is_local else 7
+            today = date.today()
+            estimated_date = today + timedelta(days=delivery_days)
+            estimate = f"By {estimated_date.strftime('%A, %b %d')}"
+        # ✅ END: Hybrid Logic
+        
+        return Response({'estimate': estimate})
