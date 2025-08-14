@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.core.cache import cache
 from .models import Seller, Buyer
-
+import re
 
 class SellerSerializer(serializers.ModelSerializer):
     """
@@ -9,17 +9,15 @@ class SellerSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Seller
-        fields = ['phone', 'name', 'shop_name', 'email', 'address', 'created_at', 'is_active']
-        read_only_fields = ['phone', 'created_at']
-
+        fields = ['id', 'phone', 'name', 'shop_name', 'email', 'address', 'created_at']
+        read_only_fields = ['id', 'phone', 'created_at']
 
 class RegisterSellerSerializer(serializers.ModelSerializer):
     """
     Serializer for handling new seller registration with OTP validation.
     """
     otp = serializers.CharField(write_only=True, required=True)
-    password = serializers.CharField(write_only=True, required=True)
-
+    
     class Meta:
         model = Seller
         fields = ['phone', 'password', 'name', 'shop_name', 'email', 'address', 'otp']
@@ -27,28 +25,13 @@ class RegisterSellerSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},
         }
 
-    def validate_phone(self, value):
-        """Validate phone number format"""
-        import re
-        if not re.match(r'^\d{10}$', str(value)):
-            raise serializers.ValidationError("Please enter a valid 10-digit phone number.")
-        return value
-
-    def validate_email(self, value):
-        """Validate email uniqueness"""
-        if value and Seller.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A seller with this email already exists.")
-        return value
-
     def validate(self, data):
         phone = data.get('phone')
         otp = data.get('otp')
 
-        # Check for existing user by phone
         if Seller.objects.filter(phone=phone).exists():
             raise serializers.ValidationError("A seller with this phone number already exists.")
 
-        # Check OTP from cache
         stored_otp = cache.get(f"otp_{phone}")
         if not stored_otp or str(stored_otp) != str(otp):
             raise serializers.ValidationError("The OTP provided is invalid or has expired.")
@@ -56,25 +39,20 @@ class RegisterSellerSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        # Remove otp from data before creating the user object
-        otp_value = validated_data.pop('otp')
-        phone = validated_data.get('phone')
+        """
+        Creates a new seller using the custom manager to ensure
+        the password is properly hashed.
+        """
+        # Remove the OTP from the data before creating the user
+        validated_data.pop('otp')
         
-        # Extract password and hash it properly
-        password = validated_data.pop('password')
+        # ✅ Use the create_user method which handles password hashing
+        seller = Seller.objects.create_user(**validated_data)
         
-        # Create seller instance
-        seller = Seller.objects.create(**validated_data)
-        
-        # Set password (this will hash it)
-        seller.set_password(password)
-        seller.save()
-        
-        # Clear the OTP from cache after successful registration
-        cache.delete(f"otp_{phone}")
+        # Clear the OTP from cache
+        cache.delete(f"otp_{seller.phone}")
         
         return seller
-
 
 class BuyerSerializer(serializers.ModelSerializer):
     """
@@ -89,17 +67,11 @@ class BuyerSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'email', 'phone_verified']
 
     def validate_phone_number(self, value):
-        """Validate phone number format if provided"""
-        if value:
-            import re
-            if not re.match(r'^\d{10}$', str(value)):
-                raise serializers.ValidationError("Please enter a valid 10-digit phone number.")
+        if value and not re.match(r'^\d{10}$', str(value)):
+            raise serializers.ValidationError("Please enter a valid 10-digit phone number.")
         return value
 
     def validate_pincode(self, value):
-        """Validate pincode format if provided"""
-        if value:
-            import re
-            if not re.match(r'^\d{6}$', str(value)):
-                raise serializers.ValidationError("Please enter a valid 6-digit pincode.")
+        if value and not re.match(r'^\d{6}$', str(value)):
+            raise serializers.ValidationError("Please enter a valid 6-digit pincode.")
         return value

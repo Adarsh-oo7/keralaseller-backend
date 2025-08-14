@@ -158,15 +158,28 @@ class StockHistoryListView(ListAPIView):
         # Return history for products belonging to the seller's store
         return StockHistory.objects.filter(product__store__seller=self.request.user).order_by('-timestamp')
 
-
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import ListAPIView
+class StorePagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = 'page_size'
+    max_page_size = 50
 
 class PublicStoreListView(ListAPIView):
     """
-    Provides a public list of all active store profiles.
+    Provides a public, paginated list of all active store profiles.
     """
     permission_classes = [permissions.AllowAny]
     serializer_class = StoreProfileSerializer
+    pagination_class = StorePagination # Assuming you have this
     queryset = StoreProfile.objects.filter(seller__is_active=True).order_by('-created_at')
+    
+    # ✅ Add these two lines to enable searching
+    filter_backends = [SearchFilter]
+    search_fields = ['name', 'tagline', 'description'] # 
+    
+    def get_queryset(self):
+        return StoreProfile.objects.filter(seller__is_active=True).order_by('-created_at')
 
 
 from rest_framework import viewsets, permissions, status
@@ -283,3 +296,52 @@ class EstimateDeliveryView(APIView):
         # ✅ END: Hybrid Logic
         
         return Response({'estimate': estimate})
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import permissions, status
+from .models import Review
+from .serializers import ReviewSerializer
+from orders.models import Order
+from users.views import IsBuyer # Assuming IsBuyer is in users/views.py
+
+# ... (your other views in this file) ...
+
+
+class CreateReviewView(APIView):
+    """
+    Allows a verified buyer to create a review for a product
+    they have purchased and had delivered.
+    """
+    permission_classes = [IsBuyer]
+
+    def post(self, request, pk=None):
+        product_id = pk
+        buyer = request.user
+        
+        # Verification Logic: Check if the buyer has purchased this product
+        has_purchased = Order.objects.filter(
+            buyer=buyer,
+            status=Order.OrderStatus.DELIVERED,
+            items__product_id=product_id
+        ).exists()
+
+        if not has_purchased:
+            return Response(
+                {'error': 'You can only review products you have purchased and received.'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if a review already exists
+        if Review.objects.filter(product_id=product_id, buyer=buyer).exists():
+            return Response({'error': 'You have already reviewed this product.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ReviewSerializer(data=request.data)
+        if serializer.is_valid():
+            # Associate the review with the product and the buyer
+            serializer.save(product_id=product_id, buyer=buyer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

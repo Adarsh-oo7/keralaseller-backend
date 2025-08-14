@@ -2,7 +2,7 @@
 
 from django.db import models
 from users.models import Seller  # Import the Seller model from your users app
-
+from django.db.models import Avg        
 
 class StoreProfile(models.Model):
     # --- Existing Fields ---
@@ -109,7 +109,9 @@ class Product(models.Model):
     image = models.ImageField(upload_to='product_images/', blank=True, null=True)
     is_active = models.BooleanField(default=True, help_text="Is the product available for sale?")
     created_at = models.DateTimeField(auto_now_add=True)
-
+    @property
+    def average_rating(self):
+        return self.reviews.aggregate(Avg('rating'))['rating__avg'] or 0
     class Meta:
         constraints = [
             CheckConstraint(
@@ -155,3 +157,23 @@ class StockHistory(models.Model):
 
     def __str__(self):
         return f"{self.product.name} stock change at {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+
+
+# In store/models.py
+from django.db import models
+from django.conf import settings
+from users.models import Buyer # Import Buyer
+
+class Review(models.Model):
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='reviews')
+    buyer = models.ForeignKey(Buyer, on_delete=models.CASCADE, related_name='reviews')
+    rating = models.PositiveIntegerField(choices=[(1, '1'), (2, '2'), (3, '3'), (4, '4' ), (5, '5')])
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Ensure a buyer can only review a product once
+        unique_together = ('product', 'buyer')
+
+    def __str__(self):
+        return f"{self.rating}-star review for {self.product.name} by {self.buyer.email}"

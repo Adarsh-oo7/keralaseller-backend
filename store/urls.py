@@ -2,7 +2,7 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProductViewSet, StoreProfileView,UpdateStockView, StockHistoryListView
+from .views import ProductViewSet, StoreProfileView,UpdateStockView, StockHistoryListView, CreateReviewView, PublicStoreListView
 from orders.views import OrderViewSet # <-- Import the OrderViewSet
 
 router = DefaultRouter()
@@ -14,6 +14,8 @@ urlpatterns = [
     path('profile/', StoreProfileView.as_view(), name='store-profile'),
     path('products/<int:pk>/update-stock/', UpdateStockView.as_view(), name='update-stock'),
     path('stock-history/', StockHistoryListView.as_view(), name='stock-history'),
+    path('products/<int:pk>/create-review/', CreateReviewView.as_view(), name='create-review'),
+    path('shops/', PublicStoreListView.as_view(), name='public-store-list'),
 
     # This now includes both /products/ and /orders/
     path('', include(router.urls)),
