@@ -6,6 +6,8 @@ from .serializers import ProductSerializer, StoreProfileSerializer
 import razorpay
 from rest_framework.filters import SearchFilter # ✅ Add this import
 
+import logging
+logger = logging.getLogger(__name__)
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -24,46 +26,97 @@ class ProductViewSet(viewsets.ModelViewSet):
             sale_type__in=[Product.SaleType.ONLINE_AND_OFFLINE, Product.SaleType.ONLINE_ONLY]
         ).order_by('-created_at')
 
+    def create(self, request, *args, **kwargs):
+        """Override create method for better error handling and sub-image handling."""
+        try:
+            # Check if user has store profile
+            if not hasattr(request.user, 'store_profile'):
+                return Response(
+                    {'error': 'You must have a store profile to create products.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Handle multiple sub_images from request.FILES
+            sub_images = request.FILES.getlist('sub_images')
+            
+            # Create a mutable copy of request data
+            data = request.data.copy()
+            data['sub_images'] = sub_images
+
+            serializer = self.get_serializer(data=data)
+            if serializer.is_valid():
+                # Save with store info (don't pass _current_user to save())
+                product = serializer.save(store=request.user.store_profile)
+                
+                # Now attach user info for the signal and save again if needed
+                product._current_user = request.user
+                # Don't call save() again unless you have signals that need this
+                
+                # Return the created product data
+                return Response(
+                    self.get_serializer(product).data, 
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                logger.error(f"Product creation failed: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Unexpected error in product creation: {str(e)}")
+            return Response(
+                {'error': 'An unexpected error occurred. Please try again.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def update(self, request, *args, **kwargs):
+        """Override update method for better error handling."""
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            
+            # Attach user info before saving
+            instance._current_user = request.user
+            instance._stock_change_note = "Product updated via dashboard"
+            
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            else:
+                logger.error(f"Product update failed: {serializer.errors}")
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Unexpected error in product update: {str(e)}")
+            return Response(
+                {'error': 'An unexpected error occurred. Please try again.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def perform_create(self, serializer):
         """
-        Save the product with the seller's store and set the current user for the signal.
+        This method is called by the default create() method.
+        Since we've overridden create(), this might not be called,
+        but keeping it for compatibility.
         """
-        # Get the seller (current user)
-        seller = self.request.user
+        # Create the product first
+        product = serializer.save(store=self.request.user.store_profile)
         
-        # Save the product with the store
-        product = serializer.save(store=seller.store_profile)
-        
-        # Set the current user for the signal to use
-        product._current_user = seller
-        product._stock_change_note = "Product created via dashboard"
-        
-        # Save again to trigger the post_save signal with user info
-        product.save()
+        # Then attach user info for any signals that might need it
+        product._current_user = self.request.user
         
         return product
 
     def perform_update(self, serializer):
         """
-        Update the product and set the current user for stock tracking.
+        This method is called by the default update() method.
+        Since we've overridden update(), this might not be called,
+        but keeping it for compatibility.
         """
-        seller = self.request.user
-        
-        # Save the product
-        product = serializer.save()
-        
-        # Set the current user and note for the signal
-        product._current_user = seller
-        product._stock_change_note = "Product updated via dashboard"
-        
-        # Save again to trigger the signal with user info
-        product.save()
-        
-        return product
-
-        # Let's update the signal for a more robust solution.
-
-
+        instance = serializer.instance
+        instance._current_user = self.request.user
+        instance._stock_change_note = "Product updated via dashboard"
+        serializer.save()
 class StoreProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 

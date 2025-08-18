@@ -32,6 +32,7 @@ urlpatterns = [
 
     path('shops/', PublicStoreListView.as_view(), name='public-store-list'),
 
+    path('api/categories/', include('categories.urls')),
 
 ]
 if settings.DEBUG:
