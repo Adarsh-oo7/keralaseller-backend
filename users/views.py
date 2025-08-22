@@ -15,7 +15,7 @@ from django.contrib.auth import get_user_model
 
 from .models import Seller, Buyer, SellerToken
 from .serializers import RegisterSellerSerializer, SellerSerializer, BuyerSerializer
-from store.models import Product
+from products.models import Product
 from orders.models import Order, OrderItem
 
 # ==============================================================================

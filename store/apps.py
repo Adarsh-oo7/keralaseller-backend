@@ -1,10 +1,8 @@
 from django.apps import AppConfig
 
-
 class StoreConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'store'
 
-    def ready(self):
-        # This connects the signals when the app is ready
-        import store.signals
+    # The 'ready' method and the 'import store.signals'
+    # line that were here before can now be safely deleted.

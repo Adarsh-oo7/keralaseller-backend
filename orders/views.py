@@ -11,7 +11,7 @@ import razorpay
 
 from .models import Order, OrderItem
 from .serializers import OrderSerializer
-from store.models import Product
+from products.models import Product
 from users.models import Seller, Buyer
 from users.views import IsBuyer
 

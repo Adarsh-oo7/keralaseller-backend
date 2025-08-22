@@ -1,7 +1,7 @@
 # In orders/serializers.py
 from rest_framework import serializers
 from .models import Order, OrderItem
-from store.serializers import ProductSerializer # We can reuse this for product details
+from products.serializers import ProductSerializer # We can reuse this for product details
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)

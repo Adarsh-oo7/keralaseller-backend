@@ -1,7 +1,8 @@
 from django.db import models
 from django.utils import timezone
-from store.models import StoreProfile, Product
+from store.models import StoreProfile
 from users.models import Buyer
+from products.models import Product
 
 class Order(models.Model):
     class OrderStatus(models.TextChoices):
